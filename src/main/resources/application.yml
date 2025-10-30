@@ -1,0 +1,23 @@
+server:
+  port: 8085
+
+services:
+  user:
+    base-url: http://localhost:8080
+  notification:
+    base-url: http://localhost:8091
+
+# circuit breaker
+resilience4j:
+  circuitbreaker:
+    instances:
+      userService:
+        slidingWindowSize: 5
+        minimumNumberOfCalls: 3
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+      notificationService:
+        slidingWindowSize: 5
+        minimumNumberOfCalls: 3
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
