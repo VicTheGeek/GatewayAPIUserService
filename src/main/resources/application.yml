@@ -6,18 +6,38 @@ services:
     base-url: http://localhost:8080
   notification:
     base-url: http://localhost:8091
+# http clients timeouts
+http:
+  client:
+    connect-timeout: 2000
+    read-timeout: 5000
 
 # circuit breaker
 resilience4j:
   circuitbreaker:
     instances:
       userService:
-        slidingWindowSize: 5
-        minimumNumberOfCalls: 3
+        registerHealthIndicator: true
+        eventConsumerBufferSize: 10
+
+        # failures count on lsat 10 calls
+        slidingWindowSize: 10
+        slidingWindowType: COUNT_BASED
+
+        # attempting to open cb after 50% of failures
         failureRateThreshold: 50
         waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 2
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+
       notificationService:
+        registerHealthIndicator: true
+        eventConsumerBufferSize: 10
+
         slidingWindowSize: 5
-        minimumNumberOfCalls: 3
-        failureRateThreshold: 50
-        waitDurationInOpenState: 10s
+        slidingWindowType: COUNT_BASED
+
+        failureRateThreshold: 60
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 2
+        automaticTransitionFromOpenToHalfOpenEnabled: true
