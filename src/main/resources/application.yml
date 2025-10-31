@@ -17,27 +17,18 @@ resilience4j:
   circuitbreaker:
     instances:
       userService:
-        registerHealthIndicator: true
-        eventConsumerBufferSize: 10
-
-        # failures count on lsat 10 calls
-        slidingWindowSize: 10
-        slidingWindowType: COUNT_BASED
-
-        # attempting to open cb after 50% of failures
+        slidingWindowSize: 5
+        minimumNumberOfCalls: 3
         failureRateThreshold: 50
         waitDurationInOpenState: 10s
-        permittedNumberOfCallsInHalfOpenState: 2
-        automaticTransitionFromOpenToHalfOpenEnabled: true
-
       notificationService:
-        registerHealthIndicator: true
-        eventConsumerBufferSize: 10
-
         slidingWindowSize: 5
-        slidingWindowType: COUNT_BASED
+        minimumNumberOfCalls: 3
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
 
-        failureRateThreshold: 60
-        waitDurationInOpenState: 15s
-        permittedNumberOfCallsInHalfOpenState: 2
-        automaticTransitionFromOpenToHalfOpenEnabled: true
+# logging
+logging:
+  level:
+    ru.vicsergeev.GetwayUserService: INFO
+    org.springframework.web: INFO

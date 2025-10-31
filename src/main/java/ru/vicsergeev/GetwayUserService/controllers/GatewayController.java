@@ -2,11 +2,16 @@ package ru.vicsergeev.GetwayUserService.controllers;
 
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import ru.vicsergeev.GetwayUserService.services.ProxyService;
+import org.springframework.http.MediaType;
 
 import lombok.RequiredArgsConstructor;
+
+import java.nio.charset.StandardCharsets;
 
 /**
  * Created by Victor 30.10.2025
@@ -16,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class GatewayController {
 
+    private static final Logger log = LoggerFactory.getLogger(GatewayController.class);
     private final ProxyService proxyService;
 
     // User service routes
@@ -25,16 +31,21 @@ public class GatewayController {
         return proxyService.forwardToUserService(path, "GET", null, request.getHeaderNames(), request);
     }
 
-    @PostMapping("/users/**")
-    public ResponseEntity<String> handleUserPOST(HttpServletRequest request) {
+    @PostMapping(value = "/users/**", consumes = MediaType.ALL_VALUE)
+    public ResponseEntity<String> handleUserPOST(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
         String path = extractPathAfterPrefix(request, "/users");
-        return proxyService.forwardToUserService(path, "POST", null, request.getHeaderNames(), request);
+        String payload = body != null ? new String(body, StandardCharsets.UTF_8) : null;
+        log.info("Gateway: Received POST /users{}, forwarding to UserService", path);
+        ResponseEntity<String> response = proxyService.forwardToUserService(path, "POST", payload, request.getHeaderNames(), request);
+        log.info("Gateway: Response from UserService - Status: {}", response.getStatusCode());
+        return response;
     }
 
-    @PutMapping("/users/**")
-    public ResponseEntity<String> handleUserPUT(HttpServletRequest request) {
+    @PutMapping(value = "/users/**", consumes = MediaType.ALL_VALUE)
+    public ResponseEntity<String> handleUserPUT(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
         String path = extractPathAfterPrefix(request, "/users");
-        return proxyService.forwardToUserService(path, "PUT", null, request.getHeaderNames(), request);
+        String payload = body != null ? new String(body, StandardCharsets.UTF_8) : null;
+        return proxyService.forwardToUserService(path, "PUT", payload, request.getHeaderNames(), request);
     }
 
     @DeleteMapping("/users/**")
@@ -50,16 +61,18 @@ public class GatewayController {
         return proxyService.forwardToNotificationService(path, "GET", null, request.getHeaderNames(), request);
     }
 
-    @PostMapping("/notifications/**")
-    public ResponseEntity<String> handleNotificationPOST(HttpServletRequest request) {
+    @PostMapping(value = "/notifications/**", consumes = MediaType.ALL_VALUE)
+    public ResponseEntity<String> handleNotificationPOST(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
         String path = extractPathAfterPrefix(request, "/notifications");
-        return proxyService.forwardToNotificationService(path, "POST", null, request.getHeaderNames(), request);
+        String payload = body != null ? new String(body, StandardCharsets.UTF_8) : null;
+        return proxyService.forwardToNotificationService(path, "POST", payload, request.getHeaderNames(), request);
     }
 
-    @PutMapping("/notifications/**")
-    public ResponseEntity<String> handleNotificationPUT(HttpServletRequest request) {
+    @PutMapping(value = "/notifications/**", consumes = MediaType.ALL_VALUE)
+    public ResponseEntity<String> handleNotificationPUT(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
         String path = extractPathAfterPrefix(request, "/notifications");
-        return proxyService.forwardToNotificationService(path, "PUT", null, request.getHeaderNames(), request);
+        String payload = body != null ? new String(body, StandardCharsets.UTF_8) : null;
+        return proxyService.forwardToNotificationService(path, "PUT", payload, request.getHeaderNames(), request);
     }
 
     @DeleteMapping("/notifications/**")

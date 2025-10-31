@@ -1,8 +1,7 @@
 package ru.vicsergeev.GetwayUserService.services;
 
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.Setter;
-import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -10,8 +9,17 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.client.RestTemplate;
+
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
+import org.apache.hc.core5.util.Timeout;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
+import ru.vicsergeev.GetwayUserService.config.ServicesProperties;
 
 import java.util.Enumeration;
 
@@ -21,25 +29,45 @@ import java.util.Enumeration;
 
 @Service
 @RequiredArgsConstructor
-@ConfigurationProperties(prefix = "services")
 public class ProxyService {
-    @Setter
-    private String userBaseURL;
-    @Setter
-    private String notificationServiceBaseURL;
+    private static final Logger log = LoggerFactory.getLogger(ProxyService.class);
+    private final ServicesProperties services;
+    private final RestTemplate restTemplate = buildRestTemplate();
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private RestTemplate buildRestTemplate() {
+        RequestConfig requestConfig = RequestConfig.custom()
+                .setConnectTimeout(Timeout.ofSeconds(2))
+                .setConnectionRequestTimeout(Timeout.ofSeconds(2))
+                .setResponseTimeout(Timeout.ofSeconds(5))
+                .build();
 
-    public ResponseEntity<String> forwardToUserService(String path, String method, String body,
-                                                       Enumeration<String> headerNames, HttpServletRequest request) {
-       String url = userBaseURL + "/users" + path + getQueryString(request);
-       return forward(url, method, body, headerNames, request);
+        CloseableHttpClient httpClient = HttpClients.custom()
+                .setDefaultRequestConfig(requestConfig)
+                .setConnectionManager(PoolingHttpClientConnectionManagerBuilder.create().build())
+                .build();
+
+        HttpComponentsClientHttpRequestFactory factory = new HttpComponentsClientHttpRequestFactory(httpClient);
+        return new RestTemplate(factory);
     }
 
+    @CircuitBreaker(name = "userService", fallbackMethod = "fallbackUserService")
+    public ResponseEntity<String> forwardToUserService(String path, String method, String body,
+                                                       Enumeration<String> headerNames, HttpServletRequest request) {
+        String url = services.getUser().getBaseUrl() + "/users" + path + getQueryString(request);
+        log.info("ProxyService: Forwarding {} request to UserService: {}", method, url);
+        ResponseEntity<String> response = forward(url, method, body, headerNames, request);
+        log.info("ProxyService: UserService responded with status: {}", response.getStatusCode());
+        return response;
+    }
+
+    @CircuitBreaker(name = "notificationService", fallbackMethod = "fallbackNotificationService")
     public ResponseEntity<String> forwardToNotificationService(String path, String method, String body,
                                                                 Enumeration<String> headerNames, HttpServletRequest request) {
-        String url = notificationServiceBaseURL + "/notifications";
-        return forward(url, method, body, headerNames, request);
+        String url = services.getNotification().getBaseUrl() + "/notifications" + path + getQueryString(request);
+        log.info("ProxyService: Forwarding {} request to NotificationService: {}", method, url);
+        ResponseEntity<String> response = forward(url, method, body, headerNames, request);
+        log.info("ProxyService: NotificationService responded with status: {}", response.getStatusCode());
+        return response;
     }
 
     private ResponseEntity<String> forward(String url, String method, String body,
@@ -66,5 +94,19 @@ public class ProxyService {
     private String getQueryString(HttpServletRequest request) {
         String qeury = request.getQueryString();
         return qeury != null ? "?" + qeury : "";
+    }
+
+    private ResponseEntity<String> fallbackUserService(String path, String method, String body,
+                                                       Enumeration<String> headerNames, HttpServletRequest request,
+                                                       Throwable t) {
+        log.warn("ProxyService: Circuit Breaker fallback for UserService - path: {}, reason: {}", path, t != null ? t.getMessage() : "unknown error");
+        return ResponseEntity.status(503).body("UserService is unavailable: " + (t != null ? t.getMessage() : "unknown error"));
+    }
+
+    private ResponseEntity<String> fallbackNotificationService(String path, String method, String body,
+                                                               Enumeration<String> headerNames, HttpServletRequest request,
+                                                               Throwable t) {
+        log.warn("ProxyService: Circuit Breaker fallback for NotificationService - path: {}, reason: {}", path, t != null ? t.getMessage() : "unknown error");
+        return ResponseEntity.status(503).body("NotificationService is unavailable: " + (t != null ? t.getMessage() : "unknown error"));
     }
 }
