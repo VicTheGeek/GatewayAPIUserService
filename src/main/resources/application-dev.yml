@@ -1,0 +1,12 @@
+# dev profile
+services:
+  user:
+    instances:
+      - http://localhost:8080
+  notification:
+    instances:
+      - http://localhost:8091
+
+logging:
+  level:
+    ru.vicsergeev.GetwayUserService: DEBUG

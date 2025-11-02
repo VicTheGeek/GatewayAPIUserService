@@ -1,0 +1,15 @@
+# prod profile
+services:
+  user:
+    instances:
+      - http://user-service-1:8080
+      - http://user-service-2:8080
+  notification:
+    instances:
+      - http://notification-service-1:8091
+      - http://notification-service-2:8091
+
+logging:
+  level:
+    ru.vicsergeev.GetwayUserService: INFO
+    org.springframework: WARN

@@ -3,10 +3,12 @@ package ru.vicsergeev.GetwayUserService;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import ru.vicsergeev.GetwayUserService.config.ServicesProperties;
 
 @SpringBootApplication
 @EnableConfigurationProperties(ServicesProperties.class)
+@EnableScheduling
 public class GetwayUserServiceApplication {
 
 	public static void main(String[] args) {

@@ -1,16 +1,27 @@
 server:
   port: 8085
 
+spring:
+  profiles:
+    active: dev  # можно переопределить через ENV: SPRING_PROFILES_ACTIVE=prod
+
 services:
   user:
-    base-url: http://localhost:8080
-  notification:
-    base-url: http://localhost:8091
-# http clients timeouts
-http:
-  client:
+    instances:
+      - http://localhost:8080
+      # - http://localhost:8081
     connect-timeout: 2000
-    read-timeout: 5000
+    response-timeout: 5000
+    health-check-interval: 30
+    health-check-timeout: 3000
+  notification:
+    instances:
+      - http://localhost:8091
+      # - http://localhost:8092
+    connect-timeout: 2000
+    response-timeout: 5000
+    health-check-interval: 30
+    health-check-timeout: 3000
 
 # circuit breaker
 resilience4j:

@@ -1,5 +1,6 @@
 package ru.vicsergeev.GetwayUserService.services;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.springframework.http.HttpEntity;
@@ -32,13 +33,23 @@ import java.util.Enumeration;
 public class ProxyService {
     private static final Logger log = LoggerFactory.getLogger(ProxyService.class);
     private final ServicesProperties services;
-    private final RestTemplate restTemplate = buildRestTemplate();
+    private final ServiceDiscoveryManager serviceDiscovery;
+    private RestTemplate restTemplate;
+
+    @PostConstruct
+    public void init() {
+        this.restTemplate = buildRestTemplate();
+    }
 
     private RestTemplate buildRestTemplate() {
+        // timeout from services config
+        int connectTimeout = services.getUser().getConnectTimeout();
+        int responseTimeout = services.getUser().getResponseTimeout();
+
         RequestConfig requestConfig = RequestConfig.custom()
-                .setConnectTimeout(Timeout.ofSeconds(2))
-                .setConnectionRequestTimeout(Timeout.ofSeconds(2))
-                .setResponseTimeout(Timeout.ofSeconds(5))
+                .setConnectTimeout(Timeout.ofMilliseconds(connectTimeout))
+                .setConnectionRequestTimeout(Timeout.ofMilliseconds(connectTimeout))
+                .setResponseTimeout(Timeout.ofMilliseconds(responseTimeout))
                 .build();
 
         CloseableHttpClient httpClient = HttpClients.custom()
@@ -53,25 +64,68 @@ public class ProxyService {
     @CircuitBreaker(name = "userService", fallbackMethod = "fallbackUserService")
     public ResponseEntity<String> forwardToUserService(String path, String method, String body,
                                                        Enumeration<String> headerNames, HttpServletRequest request) {
-        String url = services.getUser().getBaseUrl() + "/users" + path + getQueryString(request);
-        log.info("ProxyService: Forwarding {} request to UserService: {}", method, url);
-        ResponseEntity<String> response = forward(url, method, body, headerNames, request);
-        log.info("ProxyService: UserService responded with status: {}", response.getStatusCode());
-        return response;
+        String baseUrl = null;
+        int retryCount = 0;
+        int maxRetries = serviceDiscovery.getAvailableInstances("user").size();
+
+        while (retryCount < maxRetries) {
+            try {
+                baseUrl = serviceDiscovery.getNextInstance("user");
+                String url = baseUrl + "/users" + path +getQueryString(request);
+                log.info("ProxyService: forwarding {} request to USerService: {}", method, url);
+
+                ResponseEntity<String> response = forward(url, method, body, headerNames, request);
+                log.info("ProxyService: UserService responded with status: {}", response.getStatusCode());
+                return response;
+            } catch (Exception e) {
+                log.warn("ProxyService: UserService instance {} failed: {}", baseUrl, e.getMessage());
+                serviceDiscovery.markInstanceAsFailed("user", baseUrl);
+                retryCount++;
+
+                if (retryCount >= maxRetries) {
+                    throw new RuntimeException("all UserService isntances are failed", e);
+                }
+            }
+        }
+
+        throw new RuntimeException("Failed to forward request to UserService after retries");
     }
 
     @CircuitBreaker(name = "notificationService", fallbackMethod = "fallbackNotificationService")
     public ResponseEntity<String> forwardToNotificationService(String path, String method, String body,
                                                                 Enumeration<String> headerNames, HttpServletRequest request) {
-        String url = services.getNotification().getBaseUrl() + "/notifications" + path + getQueryString(request);
-        log.info("ProxyService: Forwarding {} request to NotificationService: {}", method, url);
-        ResponseEntity<String> response = forward(url, method, body, headerNames, request);
-        log.info("ProxyService: NotificationService responded with status: {}", response.getStatusCode());
-        return response;
+        String baseUrl = null;
+        int retryCount = 0;
+        int maxRetries = serviceDiscovery.getAvailableInstances("notification").size();
+
+        while (retryCount < maxRetries) {
+            try {
+                baseUrl = serviceDiscovery.getNextInstance("notification");
+                String url = baseUrl + "/notifications" + path + getQueryString(request);
+                log.info("ProxyService: forwarding {} request to NotificationService: {}", method, url);
+
+                ResponseEntity<String> response = forward(url, method, body, headerNames, request);
+                log.info("ProxyService: NotifictionService responded with status: {}", response.getStatusCode());
+                return response;
+            } catch (Exception e) {
+                log.warn("ProxyService: NotificationService instance {} failed: {}", baseUrl, e.getMessage());
+                serviceDiscovery.markInstanceAsFailed("notification", baseUrl);
+                retryCount++;
+
+                if (retryCount >= maxRetries) {
+                    throw new RuntimeException("all NotificationService isntances are failed", e);
+                }
+            }
+        }
+
+        throw new RuntimeException("Failed to forward request to NotificationService after retries");
     }
 
     private ResponseEntity<String> forward(String url, String method, String body,
                                            Enumeration<String> headerNames, HttpServletRequest request) {
+        if (restTemplate == null) {
+            throw new IllegalStateException("RestTemplate not initialized");
+        }
         HttpHeaders headers = new HttpHeaders();
         while (headerNames.hasMoreElements()) {
             String name = headerNames.nextElement();
