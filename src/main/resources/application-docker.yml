@@ -1,0 +1,23 @@
+server:
+  port: 8085
+
+services:
+  user:
+    instances:
+      - http://user-service:8080
+    connect-timeout: 2000
+    response-timeout: 5000
+    health-check-interval: 30
+    health-check-timeout: 3000
+  notification:
+    instances:
+      - http://notification-service:8091
+    connect-timeout: 2000
+    response-timeout: 5000
+    health-check-interval: 30
+    health-check-timeout: 3000
+
+logging:
+  level:
+    ru.vicsergeev.GetwayUserService: DEBUG
+    org.springframework.web: DEBUG
